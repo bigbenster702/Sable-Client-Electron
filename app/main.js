@@ -10,15 +10,22 @@ const grantedPermissions = [
     'media',
     'notifications',
     'display-capture',
-    'clipboard-write'
+    'clipboard-write',
+    'clipboard-sanitized-write'
 ]
 
 const gotTheLock = app.requestSingleInstanceLock();
 
 function getAsset(...segments) {
-    return app.isPackaged
-        ? path.join(process.resourcesPath, 'app', ...segments)
-        : path.join(__dirname, ...segments);
+    if (!app.isPackaged) return path.join(__dirname, ...segments);
+
+    const appPathCandidate = path.join(app.getAppPath(), 'app', ...segments);
+    if (fs.existsSync(appPathCandidate)) return appPathCandidate;
+
+    const resourcesApp = path.join(process.resourcesPath, 'app', ...segments);
+    if (fs.existsSync(resourcesApp)) return resourcesApp;
+
+    return appPathCandidate;
 }
 
 function getBoundsFile() {
