@@ -1,7 +1,16 @@
-const { contextBridge, ipcRenderer } = require('electron');
+import { contextBridge, ipcRenderer, clipboard } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
-    sendNotification: (title, body) => ipcRenderer.send('notify', { title, body })
+    sendNotification: (title, body) => ipcRenderer.send('notify', { title, body }),
+    writeClipboard: (text) => {
+        try {
+            clipboard.writeText(String(text ?? ''));
+            
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
 });
 
 window.addEventListener('DOMContentLoaded', () => {

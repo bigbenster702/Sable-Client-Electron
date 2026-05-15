@@ -3,7 +3,8 @@
   "productName": "Sable",
   "version": "0.0.1",
   "description": "Electron wrapper for Sable Client",
-  "main": "main.js",
+  "type": "module",
+  "main": "./app/main.js",
   "author": "7w1 <hi@sable.moe>",
   "scripts": {
     "start": "electron .",
@@ -11,38 +12,45 @@
     "pack": "electron-builder --dir"
   },
   "devDependencies": {
-    "electron": "^40.6.0",
-    "electron-builder": "^24.13.3"
+    "electron": "^42.0.1",
+    "electron-builder": "^26.8.1"
   },
   "build": {
     "appId": "moe.sable.app",
     "productName": "Sable",
     "directories": {
       "output": "dist",
-      "buildResources": "." 
+      "buildResources": "./app"
     },
     "extraResources": [
-      "favicon.png",
-      "icon.png",
-      "tray-icon.png",
-      "tray-icon@2x.png"
+      "app/icons/**/*"
     ],
     "files": [
-      "main.js",
-      "preload.js",
+      "app/main.js",
+      "app/preload.js",
       "package.json"
     ],
     "win": {
-      "icon": "favicon.png",
-      "target": ["nsis", "portable"]
+      "icon": "icons/favicon.png",
+      "target": [
+        "nsis",
+        "portable"
+      ]
     },
     "mac": {
-      "icon": "icon.png",
-      "target": ["dmg", "zip"]
+      "icon": "icons/favicon.png",
+      "target": [
+        "dmg",
+        "zip"
+      ]
     },
     "linux": {
-      "icon": "favicon.png",
-      "target": ["AppImage", "deb", "flatpak"],
+      "icon": "icons/favicon.png",
+      "target": [
+        "AppImage",
+        "deb",
+        "flatpak"
+      ],
       "category": "Chat"
     },
     "flatpak": {

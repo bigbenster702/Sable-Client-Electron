@@ -1,22 +1,50 @@
-const { app, BrowserWindow, session, Notification, ipcMain, Tray, Menu, shell, desktopCapturer } = require('electron');
-const path = require('path');
+import { app, BrowserWindow, session, Notification, ipcMain, Tray, Menu, shell, desktopCapturer, nativeImage } from 'electron';
+import fs from 'node:fs';
+import path from 'node:path';
 
 let mainWindow;
 let tray = null;
 app.isQuitting = false;
 
+const grantedPermissions = [
+    'media',
+    'notifications',
+    'display-capture',
+    'clipboard-write'
+]
+
 const gotTheLock = app.requestSingleInstanceLock();
 
-const getIconPath = () => {
+function getAsset(...segments) {
     return app.isPackaged
-        ? path.join(process.resourcesPath, 'favicon.png')
-        : path.join(__dirname, 'favicon.png');
+        ? path.join(process.resourcesPath, 'app', ...segments)
+        : path.join(__dirname, ...segments);
+}
+
+function getBoundsFile() {
+    return path.join(app.getPath('userData'), 'window-bounds.json');
 };
 
-const getTrayIconPath = () => {
-    return app.isPackaged
-        ? path.join(process.resourcesPath, 'tray-icon.png')
-        : path.join(__dirname, 'tray-icon.png');
+function loadWindowBounds() {
+    try {
+        const file = getBoundsFile();
+        if (fs.existsSync(file)) {
+            const raw = fs.readFileSync(file, 'utf8');
+
+            return JSON.parse(raw);
+        }
+    } catch (e) {
+        console.error('Failed to load window bounds:', e);
+    }
+    return null;
+};
+
+function saveWindowBounds(bounds) {
+    try {
+        fs.writeFileSync(getBoundsFile(), JSON.stringify(bounds));
+    } catch (e) {
+        console.error('Failed to save window bounds:', e);
+    }
 };
 
 if (!gotTheLock) {
@@ -31,15 +59,16 @@ if (!gotTheLock) {
     });
 
     function createWindow() {
+        const savedBounds = loadWindowBounds();
         mainWindow = new BrowserWindow({
-            width: 1200,
-            height: 800,
+            width: savedBounds && savedBounds.width ? savedBounds.width : 1200,
+            height: savedBounds && savedBounds.height ? savedBounds.height : 800,
             title: "Sable Client",
-            icon: path.join(__dirname, 'favicon.png'),
+            icon: getAsset('icons', 'favicon.png'),
             webPreferences: {
                 nodeIntegration: false,
                 contextIsolation: true,
-                preload: path.join(__dirname, 'preload.js')
+                preload: getAsset('preload.js')
             }
         });
 
@@ -52,8 +81,10 @@ if (!gotTheLock) {
         mainWindow.webContents.setWindowOpenHandler(({ url }) => {
             if (!url.includes('sable.moe')) {
                 shell.openExternal(url);
+                
                 return { action: 'deny' };
             }
+
             return { action: 'allow' };
         });
 
@@ -65,14 +96,13 @@ if (!gotTheLock) {
         });
 
         session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
-            return (permission === 'media' || permission === 'notifications' || permission === 'display-capture');
+            return grantedPermissions.includes(permission);
         });
 
         session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
             const url = webContents.getURL();
-            const isSable = url.includes('sable.moe');
-            const isAllowedPermission = (permission === 'media' || permission === 'notifications' || permission === 'display-capture');
-            callback(isSable && isAllowedPermission);
+
+            callback(url.includes('sable.moe') && grantedPermissions.includes(permission));
         });
 
         // TODO: window picker
@@ -90,18 +120,33 @@ if (!gotTheLock) {
 
         mainWindow.on('close', (event) => {
             if (!app.isQuitting) {
+                try {
+                    const [w, h] = mainWindow.getSize();
+                    saveWindowBounds({ width: w, height: h });
+                } catch (e) {
+                    console.error('Error saving bounds on close:', e);
+                }
+
                 event.preventDefault();
                 mainWindow.hide();
             }
+            
             return false;
+        });
+
+        mainWindow.on('resize', () => {
+            try {
+                const [w, h] = mainWindow.getSize();
+                saveWindowBounds({ width: w, height: h });
+            } catch (e) {
+                console.error('Error saving bounds on resize:', e);
+            }
         });
     }
 
     function createTray() {
-        const iconPath = getTrayIconPath();
-
         try {
-            tray = new Tray(iconPath);
+            tray = new Tray(getAsset('icons', 'tray-icon.png'));
 
             const contextMenu = Menu.buildFromTemplate([
                 {
@@ -135,7 +180,7 @@ if (!gotTheLock) {
         const toast = new Notification({
             title: title,
             body: body,
-            icon: getIconPath,
+            icon: getAsset('icons', 'favicon.png'),
             silent: false
         });
 
