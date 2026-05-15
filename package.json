@@ -38,7 +38,7 @@
       ]
     },
     "mac": {
-      "icon": "icons/favicon.png",
+      "icon": "icons/icon.png",
       "target": [
         "dmg",
         "zip"
