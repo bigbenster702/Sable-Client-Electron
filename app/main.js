@@ -1,4 +1,4 @@
-import { app, BrowserWindow, session, Notification, ipcMain, Tray, Menu, shell, desktopCapturer, nativeImage } from 'electron';
+import { app, BrowserWindow, session, Notification, ipcMain, Tray, Menu, shell, desktopCapturer } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -15,6 +15,62 @@ const grantedPermissions = [
 ]
 
 const gotTheLock = app.requestSingleInstanceLock();
+const authTrustedHosts = new Set();
+
+function getHostname(url) {
+    try {
+        return new URL(url).hostname.toLowerCase();
+    } catch {
+        return null;
+    }
+}
+
+function isSableHost(hostname) {
+    return hostname === 'sable.moe' || hostname.endsWith('.sable.moe');
+}
+
+function isAuthFlowUrl(url) {
+    try {
+        const u = new URL(url);
+
+        const redirect = u.searchParams.get('redirect_uri')
+            || u.searchParams.get('redirect')
+            || u.searchParams.get('return')
+            || u.searchParams.get('next')
+            || '';
+        const redirectHost = getHostname(redirect);
+        if (redirectHost && isSableHost(redirectHost)) return true;
+
+        if (u.searchParams.has('client_id')
+            && (u.searchParams.has('response_type') || u.searchParams.has('scope'))) {
+            return true;
+        }
+
+        if (/(\/oauth|\/oidc|\/authorize|\/authorization|\/sso|\/saml|\/application\/o\/)/i.test(u.pathname)) {
+            return true;
+        }
+
+        return false;
+    } catch {
+        return false;
+    }
+}
+
+function shouldOpenInApp(url) {
+    const hostname = getHostname(url);
+    if (!hostname) return false;
+
+    if (isSableHost(hostname) || authTrustedHosts.has(hostname)) {
+        return true;
+    }
+
+    if (isAuthFlowUrl(url)) {
+        authTrustedHosts.add(hostname);
+        return true;
+    }
+
+    return false;
+}
 
 function getAsset(...segments) {
     if (!app.isPackaged) return path.join(__dirname, ...segments);
@@ -86,9 +142,9 @@ if (!gotTheLock) {
         });
 
         mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-            if (!url.includes('sable.moe')) {
+            if (!shouldOpenInApp(url)) {
                 shell.openExternal(url);
-                
+
                 return { action: 'deny' };
             }
 
@@ -96,7 +152,7 @@ if (!gotTheLock) {
         });
 
         mainWindow.webContents.on('will-navigate', (event, url) => {
-            if (!url.includes('sable.moe')) {
+            if (!shouldOpenInApp(url)) {
                 event.preventDefault();
                 shell.openExternal(url);
             }
